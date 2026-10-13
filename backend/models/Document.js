@@ -64,7 +64,7 @@ const DocumentSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true,   // Same file should not be uploaded twice
+      index: true,
     },
 
     // Full gateway URL to view the file
@@ -101,5 +101,9 @@ DocumentSchema.index({ uploadedBy: 1 });
 DocumentSchema.index({ sha256Hash: 1 });  // Quick duplicate detection
 
 const Document = mongoose.model("Document", DocumentSchema);
+
+// Drop legacy unique index if it still exists in the MongoDB Atlas collection
+Document.collection.dropIndex("ipfsHash_1").catch(() => {});
+
 module.exports = Document;
 

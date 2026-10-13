@@ -27,6 +27,11 @@ const connectDB = async () => {
     });
 
     console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+    
+    // Safely remove legacy unique index on documents if present in MongoDB Atlas
+    try {
+      await conn.connection.collection("documents").dropIndex("ipfsHash_1");
+    } catch (_) {}
 
     mongoose.connection.on("disconnected", () => {
       console.warn("⚠️  MongoDB disconnected.");

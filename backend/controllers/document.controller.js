@@ -39,19 +39,42 @@ const uploadDocument = catchAsync(async (req, res, next) => {
     landId
   );
 
-  // Save metadata to MongoDB
-  const doc = await Document.create({
-    landId,
-    fileName:     `${Date.now()}-${originalname}`,
-    originalName: originalname,
-    mimeType:     mimetype,
-    fileSize:     size,
-    sha256Hash,
-    ipfsHash,
-    ipfsUrl,
-    uploadedBy:   req.user.address,
-    status:       "active",
-  });
+  // Save or reuse metadata in MongoDB (handles re-uploads of identical files gracefully)
+  let doc = null;
+  try {
+    doc = await Document.findOne({ ipfsHash });
+    if (doc) {
+      doc.landId = landId;
+      doc.fileName = `${Date.now()}-${originalname}`;
+      doc.originalName = originalname;
+      doc.mimeType = mimetype;
+      doc.fileSize = size;
+      doc.sha256Hash = sha256Hash;
+      doc.ipfsUrl = ipfsUrl;
+      doc.uploadedBy = req.user.address;
+      doc.status = "active";
+      await doc.save();
+    } else {
+      doc = await Document.create({
+        landId,
+        fileName: `${Date.now()}-${originalname}`,
+        originalName: originalname,
+        mimeType: mimetype,
+        fileSize: size,
+        sha256Hash,
+        ipfsHash,
+        ipfsUrl,
+        uploadedBy: req.user.address,
+        status: "active",
+      });
+    }
+  } catch (dbErr) {
+    if (dbErr.code === 11000) {
+      doc = await Document.findOne({ ipfsHash }) || (await Document.findOne({ sha256Hash }));
+    } else {
+      throw dbErr;
+    }
+  }
 
   // If user role was "public", promote to "seller"
   const User = require("../models/User");
@@ -75,7 +98,7 @@ const uploadDocument = catchAsync(async (req, res, next) => {
     ipfsUrl,
     sha256Hash,
     fileSize,
-    documentId: doc._id,
+    documentId: doc?._id || null,
   });
 });
 

@@ -26,6 +26,21 @@ async function main() {
     "ETH\n"
   );
 
+  // On localhost, advance nonce so the contract address is NOT the default 0x5FbDB... 
+  // (which is globally blacklisted by Blockaid/MetaMask security alerts).
+  const network = await ethers.provider.getNetwork();
+  if (network.chainId === 31337n || network.chainId === 1337n) {
+    const currentNonce = await ethers.provider.getTransactionCount(deployer.address);
+    if (currentNonce === 0) {
+      console.log("Advancing nonce to generate an unflagged, fresh contract address...");
+      const dummyTx = await deployer.sendTransaction({
+        to: deployer.address,
+        value: 0,
+      });
+      await dummyTx.wait(1);
+    }
+  }
+
   // Compile and get the contract factory
   // A "factory" is an object that knows how to deploy a contract
   const LandRegistry = await ethers.getContractFactory("LandRegistry");
@@ -105,7 +120,17 @@ async function main() {
     );
     fs.mkdirSync(path.dirname(frontendPath), { recursive: true });
     fs.writeFileSync(frontendPath, JSON.stringify(abiOutput, null, 2));
-    console.log("📄 ABI copied to frontend/src/contracts/LandRegistry.json");
+    // Update backend/.env CONTRACT_ADDRESS
+    const backendEnvPath = path.join(__dirname, "../../backend/.env");
+    if (fs.existsSync(backendEnvPath)) {
+      let envContent = fs.readFileSync(backendEnvPath, "utf8");
+      envContent = envContent.replace(
+        /CONTRACT_ADDRESS=.*/,
+        `CONTRACT_ADDRESS=${contractAddress}`
+      );
+      fs.writeFileSync(backendEnvPath, envContent);
+      console.log("📄 backend/.env CONTRACT_ADDRESS updated!");
+    }
   }
 
   console.log("\n========================================");
